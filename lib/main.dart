@@ -4,6 +4,7 @@ import 'package:flame/events.dart';
 
 import 'components/bobber.dart';
 import 'components/rain.dart';
+import 'logic/fishing_math.dart';
 
 void main() {
   runApp(GameWidget(game: MonsoonGame()));
@@ -12,30 +13,86 @@ void main() {
 class MonsoonGame extends FlameGame with TapCallbacks {
   BobberComponent? currentBobber;
   late RainComponent rain;
+  final FishingMath math = FishingMath();
+
+  double _timer = 0;
+  int _nibblesRemaining = 0;
+  bool _isFishing = false;
 
   @override
-  Color backgroundColor() => const Color(0xFF1B2A36); // Moody deep-water color
+  Color backgroundColor() => const Color(0xFF1B2A36);
 
   @override
   Future<void> onLoad() async {
     super.onLoad();
-    
-    // Initialize the rain environment
     rain = RainComponent();
     add(rain);
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (!_isFishing || currentBobber == null) return;
+
+    if (currentBobber!.state == BobberState.floating || currentBobber!.state == BobberState.nibble) {
+      _timer -= dt;
+      
+      if (_timer <= 0) {
+        if (_nibblesRemaining > 0) {
+          // Trigger a nibble
+          _nibblesRemaining--;
+          currentBobber!.changeState(BobberState.nibble);
+          _timer = 0.8; // Wait 0.8 seconds until next action
+        } else {
+          // Time to bite!
+          currentBobber!.changeState(BobberState.bite);
+          _timer = math.getBiteWindow(rain.intensity);
+        }
+      } else if (currentBobber!.state == BobberState.nibble && _timer <= 0.4) {
+         // Revert back to floating state in between nibbles
+         currentBobber!.changeState(BobberState.floating);
+      }
+    } else if (currentBobber!.state == BobberState.bite) {
+      _timer -= dt;
+      if (_timer <= 0) {
+        // Missed the fish!
+        currentBobber!.changeState(BobberState.missed);
+        _isFishing = false;
+      }
+    }
   }
 
   @override
   void onTapDown(TapDownEvent event) {
     super.onTapDown(event);
     
-    // Remove existing bobber if there is one
+    // Check if we are currently interacting with an active bobber
+    if (currentBobber != null) {
+      if (currentBobber!.state == BobberState.bite) {
+        // Caught the fish!
+        currentBobber!.changeState(BobberState.caught);
+        _isFishing = false;
+        return;
+      } else if (_isFishing) {
+        // Reeled in too early!
+        currentBobber!.changeState(BobberState.missed);
+        _isFishing = false;
+        return;
+      }
+    }
+
+    // Cast a new line
     if (currentBobber != null) {
       remove(currentBobber!);
     }
     
-    // Add new bobber at tap location
     currentBobber = BobberComponent(position: event.localPosition);
     add(currentBobber!);
+    
+    // Start fishing sequence
+    _isFishing = true;
+    _nibblesRemaining = math.getNibbleCount();
+    _timer = math.getWaitTime(rain.intensity);
+    currentBobber!.changeState(BobberState.floating);
   }
 }
