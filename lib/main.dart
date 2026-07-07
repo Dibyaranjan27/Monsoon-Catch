@@ -13,6 +13,7 @@ void main() {
 class MonsoonGame extends FlameGame with TapCallbacks {
   BobberComponent? currentBobber;
   late RainComponent rain;
+  late TextComponent feedbackText;
   final FishingMath math = FishingMath();
 
   double _timer = 0;
@@ -27,6 +28,20 @@ class MonsoonGame extends FlameGame with TapCallbacks {
     super.onLoad();
     rain = RainComponent();
     add(rain);
+
+    feedbackText = TextComponent(
+      text: 'Tap to Cast!',
+      position: Vector2(size.x / 2, 50),
+      anchor: Anchor.topCenter,
+      textRenderer: TextPaint(
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+    add(feedbackText);
   }
 
   @override
@@ -57,6 +72,7 @@ class MonsoonGame extends FlameGame with TapCallbacks {
       if (_timer <= 0) {
         // Missed the fish!
         currentBobber!.changeState(BobberState.missed);
+        feedbackText.text = 'Missed it!';
         _isFishing = false;
       }
     }
@@ -71,17 +87,20 @@ class MonsoonGame extends FlameGame with TapCallbacks {
       if (currentBobber!.state == BobberState.bite) {
         // Caught the fish!
         currentBobber!.changeState(BobberState.caught);
+        feedbackText.text = 'Caught!';
         _isFishing = false;
         return;
       } else if (_isFishing) {
         // Reeled in too early!
         currentBobber!.changeState(BobberState.missed);
+        feedbackText.text = 'Too early!';
         _isFishing = false;
         return;
       }
     }
 
     // Cast a new line
+    feedbackText.text = 'Waiting...';
     if (currentBobber != null) {
       remove(currentBobber!);
     }
