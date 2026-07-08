@@ -6,6 +6,8 @@ import 'package:flame/text.dart';
 
 import 'components/bobber.dart';
 import 'components/rain.dart';
+import 'components/parallax_background.dart';
+import 'components/character.dart';
 import 'logic/fishing_math.dart';
 
 void main() {
@@ -15,6 +17,8 @@ void main() {
 class MonsoonGame extends FlameGame with TapCallbacks {
   BobberComponent? currentBobber;
   late RainComponent rain;
+  late ParallaxBackground background;
+  late CharacterPlaceholder character;
   late TextComponent feedbackText;
   final FishingMath math = FishingMath();
 
@@ -28,8 +32,18 @@ class MonsoonGame extends FlameGame with TapCallbacks {
   @override
   Future<void> onLoad() async {
     super.onLoad();
+    
+    // 1. Background Layers
+    background = ParallaxBackground();
+    add(background);
+
+    // 2. Weather
     rain = RainComponent();
     add(rain);
+
+    // 3. Character
+    character = CharacterPlaceholder();
+    add(character);
 
     feedbackText = TextComponent(
       text: 'Tap to Cast!',
@@ -102,18 +116,42 @@ class MonsoonGame extends FlameGame with TapCallbacks {
     }
 
     // Cast a new line
-    feedbackText.text = 'Waiting...';
-    if (currentBobber != null) {
-      remove(currentBobber!);
+    // Only allow casting into the water area (right side of the bank, bottom 40%)
+    if (event.localPosition.x > size.x * 0.3 && event.localPosition.y > size.y * 0.6) {
+      feedbackText.text = 'Waiting...';
+      if (currentBobber != null) {
+        remove(currentBobber!);
+      }
+      
+      currentBobber = BobberComponent(position: event.localPosition);
+      add(currentBobber!);
+      
+      // Start fishing sequence
+      _isFishing = true;
+      _nibblesRemaining = math.getNibbleCount();
+      _timer = math.getWaitTime(rain.intensity);
+      currentBobber!.changeState(BobberState.floating);
+    } else {
+      feedbackText.text = 'Tap the water to cast!';
     }
+  }
+
+  @override
+  void render(Canvas canvas) {
+    super.render(canvas);
     
-    currentBobber = BobberComponent(position: event.localPosition);
-    add(currentBobber!);
-    
-    // Start fishing sequence
-    _isFishing = true;
-    _nibblesRemaining = math.getNibbleCount();
-    _timer = math.getWaitTime(rain.intensity);
-    currentBobber!.changeState(BobberState.floating);
+    // Draw the fishing line if a bobber exists
+    if (currentBobber != null) {
+      final paint = Paint()
+        ..color = Colors.white.withValues(alpha: 0.6)
+        ..strokeWidth = 1.0;
+      
+      final rodTip = character.getRodTipPosition();
+      canvas.drawLine(
+        Offset(rodTip.x, rodTip.y),
+        Offset(currentBobber!.position.x, currentBobber!.position.y),
+        paint,
+      );
+    }
   }
 }
