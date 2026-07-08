@@ -2,9 +2,11 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import 'dart:math';
 
+import '../main.dart';
+
 enum RainIntensity { light, medium, heavy }
 
-class RainComponent extends PositionComponent with HasGameRef {
+class RainComponent extends PositionComponent with HasGameReference<MonsoonGame> {
   RainIntensity intensity = RainIntensity.light;
   final Random _rnd = Random();
   double _timeSinceLastDrop = 0;
@@ -30,13 +32,13 @@ class RainComponent extends PositionComponent with HasGameRef {
 
   void _spawnDrop() {
     // Spawn drop anywhere along the top width of the screen
-    final startX = _rnd.nextDouble() * gameRef.size.x;
+    final startX = _rnd.nextDouble() * game.size.x;
     final drop = RainDrop(Vector2(startX, -20));
     add(drop);
   }
 }
 
-class RainDrop extends RectangleComponent with HasGameRef {
+class RainDrop extends RectangleComponent with HasGameReference<MonsoonGame> {
   final double speed;
 
   RainDrop(Vector2 position)
@@ -44,7 +46,7 @@ class RainDrop extends RectangleComponent with HasGameRef {
         super(
           position: position,
           size: Vector2(2, 15),
-          paint: Paint()..color = Colors.lightBlueAccent.withOpacity(0.5),
+          paint: Paint()..color = Colors.lightBlueAccent.withValues(alpha: 0.5),
         );
 
   @override
@@ -53,7 +55,7 @@ class RainDrop extends RectangleComponent with HasGameRef {
     position.y += speed * dt;
     
     // Remove the drop when it falls off the bottom of the screen
-    if (position.y > gameRef.size.y) {
+    if (position.y > game.size.y) {
       removeFromParent();
     }
   }

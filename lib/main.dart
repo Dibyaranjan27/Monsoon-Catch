@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flame/game.dart';
 import 'package:flame/events.dart';
+import 'package:flame/components.dart';
+import 'package:flame/text.dart';
 
 import 'components/bobber.dart';
 import 'components/rain.dart';
