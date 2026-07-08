@@ -51,9 +51,16 @@ class MonsoonGame extends FlameGame with TapCallbacks {
       anchor: Anchor.topCenter,
       textRenderer: TextPaint(
         style: const TextStyle(
+          fontFamily: 'PressStart2P',
           color: Colors.white,
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
+          fontSize: 16, // Scaled down as pixel fonts are quite large by default
+          shadows: [
+            Shadow(
+              blurRadius: 2.0,
+              color: Colors.black54,
+              offset: Offset(2.0, 2.0),
+            ),
+          ],
         ),
       ),
     );
