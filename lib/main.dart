@@ -84,6 +84,7 @@ class MonsoonGame extends FlameGame with TapCallbacks {
         } else {
           // Time to bite!
           currentBobber!.changeState(BobberState.bite);
+          character.current = CharacterState.reeling;
           _timer = math.getBiteWindow(rain.intensity);
         }
       } else if (currentBobber!.state == BobberState.nibble && _timer <= 0.4) {
@@ -95,6 +96,7 @@ class MonsoonGame extends FlameGame with TapCallbacks {
       if (_timer <= 0) {
         // Missed the fish!
         currentBobber!.changeState(BobberState.missed);
+        character.current = CharacterState.idle;
         feedbackText.text = 'Missed it!';
         _isFishing = false;
       }
@@ -110,12 +112,14 @@ class MonsoonGame extends FlameGame with TapCallbacks {
       if (currentBobber!.state == BobberState.bite) {
         // Caught the fish!
         currentBobber!.changeState(BobberState.caught);
+        character.current = CharacterState.caught;
         feedbackText.text = 'Caught!';
         _isFishing = false;
         return;
       } else if (_isFishing) {
         // Reeled in too early!
         currentBobber!.changeState(BobberState.missed);
+        character.current = CharacterState.idle;
         feedbackText.text = 'Too early!';
         _isFishing = false;
         return;
@@ -138,6 +142,7 @@ class MonsoonGame extends FlameGame with TapCallbacks {
       _nibblesRemaining = math.getNibbleCount();
       _timer = math.getWaitTime(rain.intensity);
       currentBobber!.changeState(BobberState.floating);
+      character.current = CharacterState.idle;
     } else {
       feedbackText.text = 'Tap the water to cast!';
     }

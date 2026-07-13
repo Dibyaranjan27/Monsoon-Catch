@@ -2,84 +2,77 @@ import 'package:flame/components.dart';
 import 'package:flame/effects.dart';
 import 'package:flutter/material.dart';
 
-enum BobberState { idle, floating, nibble, bite, caught, missed }
+import '../main.dart';
 
-class BobberComponent extends CircleComponent {
-  BobberState state = BobberState.idle;
+enum BobberState { floating, nibble, bite, caught, missed }
 
-  BobberComponent({required super.position})
+class BobberComponent extends SpriteComponent with HasGameReference<MonsoonGame> {
+  BobberState state = BobberState.floating;
+  late Vector2 originalPosition;
+
+  BobberComponent({required Vector2 position})
       : super(
-          radius: 8.0,
+          position: position,
           anchor: Anchor.center,
-          paint: Paint()..color = Colors.orange,
-        );
+        ) {
+    originalPosition = position.clone();
+  }
 
   @override
   Future<void> onLoad() async {
-    super.onLoad();
-    _startIdleAnimation();
-  }
-
-  void _startIdleAnimation() {
-    removeAll(children.whereType<MoveEffect>());
-    add(
-      MoveEffect.by(
-        Vector2(0, 4),
-        EffectController(
-          duration: 1.0,
-          alternate: true,
-          infinite: true,
-        ),
-      ),
-    );
+    sprite = await game.loadSprite('bobber.png');
+    size = Vector2(40, 40); // Base size for the sprite
   }
 
   void changeState(BobberState newState) {
-    if (state == newState) return;
     state = newState;
+    removeAll(children.query<Effect>());
 
-    removeAll(children.whereType<MoveEffect>());
-
-    switch (state) {
-      case BobberState.idle:
+    switch (newState) {
       case BobberState.floating:
-        paint.color = Colors.orange;
-        _startIdleAnimation();
-        break;
-      case BobberState.nibble:
-        paint.color = Colors.yellow;
-        // Fast small jitters
+        // Slow bob up and down
         add(
           MoveEffect.by(
-            Vector2(0, 3),
-            EffectController(duration: 0.1, alternate: true, repeatCount: 3),
+            Vector2(0, 5),
+            EffectController(duration: 1.5, reverseDuration: 1.5, infinite: true),
+          ),
+        );
+        break;
+      case BobberState.nibble:
+        // Quick jitter
+        add(
+          MoveEffect.by(
+            Vector2(0, 5),
+            EffectController(duration: 0.1, reverseDuration: 0.1, repeatCount: 2),
           ),
         );
         break;
       case BobberState.bite:
-        paint.color = Colors.red;
-        // Pulled sharply under water
+        // Pulled sharply underwater
         add(
-          MoveEffect.by(
-            Vector2(0, 12),
-            EffectController(duration: 0.1, alternate: false),
+          MoveEffect.to(
+            originalPosition + Vector2(0, 15),
+            EffectController(duration: 0.1),
           ),
         );
         break;
       case BobberState.caught:
-        paint.color = Colors.green;
-        // Jumps out of water
+        // Jump out of water
         add(
-          MoveEffect.by(
-            Vector2(0, -30),
-            EffectController(duration: 0.2, alternate: true, repeatCount: 1),
+          MoveEffect.to(
+            originalPosition - Vector2(0, 50),
+            EffectController(duration: 0.5, curve: Curves.easeOutQuad),
           ),
         );
         break;
       case BobberState.missed:
-        paint.color = Colors.grey;
-        // Sad float back to center
-        _startIdleAnimation();
+        // Return to float position sadly
+        add(
+          MoveEffect.to(
+            originalPosition,
+            EffectController(duration: 0.5),
+          ),
+        );
         break;
     }
   }
