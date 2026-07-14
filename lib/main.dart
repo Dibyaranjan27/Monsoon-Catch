@@ -152,8 +152,8 @@ class MonsoonGame extends FlameGame with TapCallbacks {
   void render(Canvas canvas) {
     super.render(canvas);
     
-    // Draw the fishing line if a bobber exists
-    if (currentBobber != null) {
+    // Draw the fishing line if a bobber exists and we are actively fishing
+    if (currentBobber != null && _isFishing) {
       final paint = Paint()
         ..color = Colors.white.withValues(alpha: 0.6)
         ..strokeWidth = 1.0;
