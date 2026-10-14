@@ -23,6 +23,8 @@ class GameConfig {
   static const int priorityBankTrees = 50;
   static const int priorityRiverBank = 60;
   static const int priorityWaterSurface = 70;
+  static const int priorityBobber = 75;
+  static const int priorityFishingLine = 78;
   static const int priorityCharacter = 80;
   static const int priorityRain = 90;
   static const int priorityHud = 100;

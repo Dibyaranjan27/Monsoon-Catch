@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../components/bobber.dart';
 import '../components/character.dart';
 import '../components/environment/dynamic_environment.dart';
+import '../components/fishing_line.dart';
 import '../components/rain.dart';
 import '../config/game_config.dart';
 import '../logic/fishing_math.dart';
@@ -12,14 +13,15 @@ import '../models/weather_state.dart';
 import 'monsoon_game.dart';
 
 /// Logical world container hosting the dynamic procedural environment,
-/// character, rain, and interactive fishing elements.
+/// procedural character, physics-aware fishing line, bobber, rain, and HUD.
 class MonsoonWorld extends World
     with TapCallbacks, HasGameReference<MonsoonGame> {
   final WeatherState weather;
 
   late final DynamicEnvironment environment;
   late final RainComponent rain;
-  late final CharacterPlaceholder character;
+  late final CharacterComponent character;
+  late final FishingLineComponent fishingLine;
   late final TextComponent feedbackText;
 
   BobberComponent? currentBobber;
@@ -28,6 +30,11 @@ class MonsoonWorld extends World
   double _timer = 0;
   int _nibblesRemaining = 0;
   bool _isFishing = false;
+  double _autoResetTimer = 0;
+
+  bool get isFishing => _isFishing;
+  double get timer => _timer;
+  int get nibblesRemaining => _nibblesRemaining;
 
   MonsoonWorld({WeatherState? weather})
       : weather = weather ?? WeatherState();
@@ -36,22 +43,34 @@ class MonsoonWorld extends World
   Future<void> onLoad() async {
     super.onLoad();
 
-    // 1. Pure procedural dynamic environment (zero static bitmaps)
+    // 1. Pure procedural dynamic environment (Priority 0)
     environment = DynamicEnvironment(
       size: GameConfig.virtualSize,
       weather: weather,
     );
     await add(environment);
 
-    // 2. Weather-synchronized rain particle system
+    // 2. Weather-synchronized rain particle system (Priority 90)
     rain = RainComponent(weather: weather);
     await add(rain);
 
-    // 3. Pixel fisher character on left bank perch
-    character = CharacterPlaceholder();
+    // 3. Procedural pixel fisher character on riverbank platform (Priority 80)
+    character = CharacterComponent(
+      position: Vector2(118.0, 208.8),
+    );
     await add(character);
 
-    // 4. Instructions HUD Text (positioned within 640x360 virtual space)
+    // 4. Physics-aware catenary/Bezier fishing line (Priority 78)
+    fishingLine = FishingLineComponent(
+      rodTipProvider: () => character.rodTipPosition,
+      bobberPositionProvider: () => currentBobber?.position,
+      tensionProvider: _getLineTension,
+      windFactorProvider: () => weather.windSpeed,
+      activeProvider: () => _isFishing && currentBobber != null,
+    );
+    await add(fishingLine);
+
+    // 5. Instructions HUD Text (Priority 100)
     feedbackText = TextComponent(
       text: 'Tap water to cast!',
       position: Vector2(GameConfig.virtualWidth / 2, 22),
@@ -75,9 +94,86 @@ class MonsoonWorld extends World
     await add(feedbackText);
   }
 
+  /// Evaluates normalized line tension tau in [0.0, 1.0].
+  double _getLineTension() {
+    if (!_isFishing || currentBobber == null) return 0.0;
+
+    if (character.current == CharacterState.casting) {
+      // Dynamic tension during whip and flight
+      return (0.85 * (1.0 - character.castProgress) + 0.15).clamp(0.0, 1.0);
+    } else if (character.current == CharacterState.reeling ||
+        currentBobber!.state == BobberState.bite) {
+      // Maximum tension under fish strike / reeling strain
+      return 1.0;
+    } else if (character.current == CharacterState.caught) {
+      return 0.35;
+    } else if (currentBobber!.state == BobberState.nibble) {
+      return 0.40;
+    }
+    // Idle / floating: slack sag
+    return 0.0;
+  }
+
+  /// Retracts the fishing line and cleanly resets all fishing entities atomically.
+  void resetFishingState() {
+    _isFishing = false;
+    _timer = 0;
+    _nibblesRemaining = 0;
+    _autoResetTimer = 0;
+
+    if (currentBobber != null) {
+      currentBobber!.reset();
+      remove(currentBobber!);
+      currentBobber = null;
+    }
+
+    fishingLine.deactivate();
+    character.resetToIdle();
+  }
+
+  /// Alias for clean retraction.
+  void retractLine() => resetFishingState();
+
+  /// Initiates a cast to [pos] within the water body.
+  void castTo(Vector2 pos) {
+    resetFishingState();
+
+    _isFishing = true;
+    feedbackText.text = 'Casting...';
+
+    currentBobber = BobberComponent(position: pos, weather: weather);
+    add(currentBobber!);
+    fishingLine.activate();
+
+    character.startCast(
+      duration: 0.65,
+    );
+
+    currentBobber!.startCastTrajectory(
+      from: character.rodTipPosition,
+      to: pos,
+      duration: 0.65,
+      onTouchdown: () {
+        feedbackText.text = 'Waiting for bite...';
+        _nibblesRemaining = math.getNibbleCount();
+        _timer = math.getWaitTime(rain.intensity);
+      },
+    );
+  }
+
   @override
   void update(double dt) {
     super.update(dt);
+
+    if (_autoResetTimer > 0) {
+      _autoResetTimer -= dt;
+      if (_autoResetTimer <= 0) {
+        resetFishingState();
+        feedbackText.text = 'Tap water to cast!';
+      }
+      return;
+    }
+
     if (!_isFishing || currentBobber == null) return;
 
     if (currentBobber!.state == BobberState.floating ||
@@ -86,14 +182,15 @@ class MonsoonWorld extends World
 
       if (_timer <= 0) {
         if (_nibblesRemaining > 0) {
-          // Trigger a nibble jitter
+          // Trigger a nibble twitch
           _nibblesRemaining--;
           currentBobber!.changeState(BobberState.nibble);
           _timer = 0.8;
         } else {
-          // Fish strikes! Narrow bite window
+          // Fish strikes! Heavy strain on rod
           currentBobber!.changeState(BobberState.bite);
           character.current = CharacterState.reeling;
+          feedbackText.text = 'Fish on! Reel now!';
           _timer = math.getBiteWindow(rain.intensity);
         }
       } else if (currentBobber!.state == BobberState.nibble && _timer <= 0.4) {
@@ -107,6 +204,7 @@ class MonsoonWorld extends World
         character.current = CharacterState.idle;
         feedbackText.text = 'Missed it!';
         _isFishing = false;
+        _autoResetTimer = 0.8;
       }
     }
   }
@@ -124,6 +222,7 @@ class MonsoonWorld extends World
         character.current = CharacterState.caught;
         feedbackText.text = 'Caught a fish!';
         _isFishing = false;
+        _autoResetTimer = 1.8;
         return;
       } else if (_isFishing) {
         // Reeled too early
@@ -131,6 +230,7 @@ class MonsoonWorld extends World
         character.current = CharacterState.idle;
         feedbackText.text = 'Too early!';
         _isFishing = false;
+        _autoResetTimer = 0.8;
         return;
       }
     }
@@ -141,41 +241,9 @@ class MonsoonWorld extends World
         pos.y >= GameConfig.virtualHeight * 0.60 &&
         pos.x <= GameConfig.virtualWidth &&
         pos.y <= GameConfig.virtualHeight) {
-      feedbackText.text = 'Waiting for bite...';
-
-      if (currentBobber != null) {
-        remove(currentBobber!);
-      }
-
-      currentBobber = BobberComponent(position: pos);
-      add(currentBobber!);
-
-      _isFishing = true;
-      _nibblesRemaining = math.getNibbleCount();
-      _timer = math.getWaitTime(rain.intensity);
-      currentBobber!.changeState(BobberState.floating);
-      character.current = CharacterState.idle;
+      castTo(pos);
     } else {
       feedbackText.text = 'Tap the water to cast!';
-    }
-  }
-
-  @override
-  void render(Canvas canvas) {
-    super.render(canvas);
-
-    // Render fishing line between rod tip and bobber
-    if (currentBobber != null && _isFishing) {
-      final linePaint = Paint()
-        ..color = Colors.white.withValues(alpha: 0.65)
-        ..strokeWidth = 1.0;
-
-      final rodTip = character.getRodTipPosition();
-      canvas.drawLine(
-        Offset(rodTip.x, rodTip.y),
-        Offset(currentBobber!.position.x, currentBobber!.position.y),
-        linePaint,
-      );
     }
   }
 }
