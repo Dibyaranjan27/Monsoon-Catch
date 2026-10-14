@@ -1,17 +1,23 @@
 import 'package:flame/components.dart';
-import '../main.dart';
+
+import '../config/game_config.dart';
+import '../game/monsoon_game.dart';
 
 enum CharacterState { idle, casting, reeling, caught }
 
-class CharacterPlaceholder extends SpriteGroupComponent<CharacterState> with HasGameReference<MonsoonGame> {
+class CharacterPlaceholder
+    extends SpriteGroupComponent<CharacterState>
+    with HasGameReference<MonsoonGame> {
+  CharacterPlaceholder()
+      : super(
+          size: Vector2(80, 80),
+          position: Vector2(35, 138),
+          priority: GameConfig.priorityCharacter,
+        );
+
   @override
   Future<void> onLoad() async {
     super.onLoad();
-
-    // Position the character on the left bank
-    // Increased size to make the character look better
-    size = Vector2(300, 300); 
-    position = Vector2(game.size.x * 0.02, game.size.y * 0.55 - 200);
 
     final idleSprite = await game.loadSprite('character_idle.png');
     final castingSprite = await game.loadSprite('character_casting.png');
@@ -28,15 +34,14 @@ class CharacterPlaceholder extends SpriteGroupComponent<CharacterState> with Has
     current = CharacterState.idle;
   }
 
-  /// Calculates the tip of the rod so we can draw a line to the bobber later
+  /// Calculates the tip of the rod to anchor the fishing line
   Vector2 getRodTipPosition() {
-    // The rod tip position depends on the sprite and the state.
-    // Adjusted percentages based on the visual bounding box of the sprites
     if (current == CharacterState.casting) {
       return absolutePosition + Vector2(size.x * 0.85, size.y * 0.25);
-    } else if (current == CharacterState.caught || current == CharacterState.reeling) {
-      return absolutePosition + Vector2(size.x * 0.7, size.y * 0.35);
+    } else if (current == CharacterState.caught ||
+        current == CharacterState.reeling) {
+      return absolutePosition + Vector2(size.x * 0.70, size.y * 0.35);
     }
-    return absolutePosition + Vector2(size.x * 0.75, size.y * 0.45); 
+    return absolutePosition + Vector2(size.x * 0.75, size.y * 0.45);
   }
 }
